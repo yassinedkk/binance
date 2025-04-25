@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'   # Tous les jours à minuit UTC
   workflow_dispatch:      # Permet aussi de lancer manuellement
-
+  
 jobs:
   run-binance:
     runs-on: ubuntu-latest
