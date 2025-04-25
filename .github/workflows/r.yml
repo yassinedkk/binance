@@ -20,7 +20,8 @@ jobs:
 
       - name: Install required R packages
         run: |
-          Rscript -e 'install.packages(c("httr", "jsonlite", "dplyr"), repos = "https://cloud.r-project.org", dependencies = FALSE)'
+          Rscript -e 'install.packages(c('cli', 'generics', 'glue', 'lifecycle', 'magrittr', 'pillar', 'R6', 'rlang', 'tibble', 'tidyselect', 'vctrs', 'curl', 'mime', 'openssl')),
+                    install.packages(c("httr", "jsonlite", "dplyr"), repos = "https://cloud.r-project.org", dependencies = FALSE)'
       
       - name: Run R script
         run: |
