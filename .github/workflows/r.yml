@@ -20,9 +20,13 @@ jobs:
 
       - name: Install required R packages
         run: |
-          Rscript  -e 'install.packages(c("cli", "generics", "glue", "lifecycle", "magrittr", "pillar", "R6", "rlang", "tibble", "tidyselect", "vctrs", "curl", "mime", "openssl", "httr", "jsonlite", "dplyr"), repos = "https://cloud.r-project.org")'
-
-                    
+          Rscript -e ' packages <- c("cli", "generics", "glue", "lifecycle", "magrittr","pillar", "R6", "rlang", "tibble", "tidyselect","vctrs", "curl", "mime", "openssl", "httr", "jsonlite", "dplyr")
+                 for (pkg in packages) {
+                     if (!requireNamespace(pkg, quietly = TRUE)) {
+                          install.packages(pkg, repos = "https://cloud.r-project.org")
+                     }
+                }
+               '
       
       - name: Run R script
         run: |
