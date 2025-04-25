@@ -55,12 +55,8 @@ fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
 if (interactive()) {
   symbol <- "BTCUSDT"
   
-  # Lire les dates de début et de fin en entrée utilisateur
-  start_time_str <- readline(prompt = "Entrez la date de début (YYYY-MM-DD): ")
-  end_time_str <- readline(prompt = "Entrez la date de fin (YYYY-MM-DD): ")
-  
-  start_time <- as.POSIXct(start_time_str, format = "%Y-%m-%d", tz = "UTC")
-  end_time <- as.POSIXct(end_time_str, format = "%Y-%m-%d", tz = "UTC")
+  start_time <- as.POSIXct(Sys.Date() - 1, tz = "UTC")
+  end_time <- as.POSIXct(Sys.Date(), tz = "UTC")
   
   # Récupérer les trades
   trades <- fetch_trades(symbol, start_time, end_time)
