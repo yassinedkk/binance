@@ -115,16 +115,19 @@ daily_summary_whales <- trades_clean %>%
   )
 t_wales=trades_clean[,-4:-8]
 whales= subset(t_wales,trades_clean$q >= 10)
-df_normal=daily_summary
-df_whale=daily_summary_whales
-q_whale=whales
+
+df_normal=rbind(df_normal,daily_summary)
+df_whale=rbind(df_whale,daily_summary_whales)
+q_whale=rbind(q_whale,whales)
 
 write.csv(df_normal, "df_normal.csv", row.names = FALSE)
 write.csv(df_whale, "df_whale.csv", row.names = FALSE)
 write.csv(q_whale, "q_whale.csv", row.names = FALSE)
 
 system("git add df_normal.csv")  
-system("git commit -m 'Mise à jour des données récupérées'")  
+system("git commit -m 'Mise a jour des donnees recuperees'")  
 system("git push origin main")
 
+system("git add df_whale.csv") 
+system("git add q_whale.csv") 
 
