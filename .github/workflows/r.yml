@@ -1,0 +1,22 @@
+name: Run R Script Daily
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Minuit UTC (ajustez si besoin)
+  workflow_dispatch:  # Permet de lancer manuellement
+
+jobs:
+  run-r:
+    runs-on: ubuntu-latest  # Linux est plus rapide et gratuit
+    steps:
+      - uses: actions/checkout@v4  # Télécharge votre dépôt
+      
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2  # Installe R
+      
+      - name: Install required packages (si nécessaire)
+        run: |
+          Rscript -e 'install.packages(c("packagename1", "packagename2"))'
+      
+      - name: Run your R script
+        run: Rscript chemin/vers/votre_script.R  # Remplacez par votre chemin
