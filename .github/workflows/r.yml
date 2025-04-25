@@ -2,7 +2,7 @@ name: Run Binance Script
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *"  # Minuit UTC chaque jour
   workflow_dispatch:
 
 jobs:
@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Nécessaire pour les opérations git ultérieures
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
@@ -19,16 +21,15 @@ jobs:
       - name: Install required R packages
         run: |
           Rscript -e 'install.packages(c("httr", "jsonlite", "dplyr"), repos = "https://cloud.r-project.org", dependencies = TRUE)'
-
+      
       - name: Run R script
         run: |
           Rscript binance.R
-
-      - name: Commit updated CSV files
+      
+      - name: Commit and push changes
         run: |
-          git config --global user.email "you@example.com"
+          git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git add *.csv
-          git commit -m "Update CSVs from Binance API" || echo "No changes to commit"
+          git diff-index --quiet HEAD || git commit -m "Update CSVs from Binance API [skip ci]"
           git push
-
