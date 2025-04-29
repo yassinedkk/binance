@@ -1,5 +1,6 @@
 name: Run Binance Script
-
+permissions:
+  contents: write 
 on:
   schedule:
     - cron: "0 0 * * *"  # Minuit UTC chaque jour
