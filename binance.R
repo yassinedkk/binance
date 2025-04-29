@@ -1,11 +1,13 @@
+# Charger les bibliothèques nécessaires
 library(httr)
 library(jsonlite)
 library(dplyr)
 
+# Fonction de récupération des trades Binance
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
   url <- "https://api.binance.com/api/v3/aggTrades"
   trades <- list()
-  
+
   repeat {
     params <- list(
       symbol = symbol,
@@ -13,117 +15,111 @@ fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
       endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
       limit = limit
     )
-    
-    # Imprimer les paramètres pour vérifier les timestamps
-    print(paste("startTime (ms):", params$startTime))
-    print(paste("endTime (ms):", params$endTime))
-    
+
     response <- GET(url, query = params)
-    
-    # Vérifier le statut de la réponse
+
     if (http_status(response)$category != "Success") {
-      print("Erreur dans la requête API.")
-      print(content(response, as = "text", encoding = "UTF-8"))
+      message("Erreur API : ", content(response, as = "text", encoding = "UTF-8"))
       break
     }
-    
+
     data <- fromJSON(content(response, as = "text", encoding = "UTF-8"), simplifyDataFrame = TRUE)
-    
-    # Vérification si la réponse est correcte et contient des données
-    if (is.null(data) || length(data) == 0 || is.null(nrow(data))) {
-      print("Aucun trade récupéré ou données invalides.")
-      break  # Arrêter si aucun trade n'est retourné ou si les données sont invalides
+
+    if (is.null(data) || nrow(data) == 0) {
+      message("Aucun trade récupéré.")
+      break
     }
-    
-    # Ajouter les données au tableau de résultats
+
     trades <- append(trades, list(data))
-    
-    # Mettre à jour le start_time pour commencer à partir du dernier trade
     start_time <- as.POSIXct(max(data$T) / 1000, origin = "1970-01-01", tz = "UTC") + 1
-    
-    if (nrow(data) < limit) break  # Arrêter si le nombre de résultats est inférieur à la limite
+
+    if (nrow(data) < limit) break
   }
-  
-  # Transformer la liste de trades en data frame si elle n'est pas vide
+
   if (length(trades) > 0) {
-    trades_df <- bind_rows(trades)  # Combine toutes les données en un seul data frame
-    return(trades_df)
+    return(bind_rows(trades))
   } else {
-    return(data.frame())  # Retourner un tableau vide si aucune donnée n'a été récupérée
-  }
-}
-if (interactive()) {
-  symbol <- "BTCUSDT"
-  
-  start_time <- as.POSIXct(Sys.Date() - 1, tz = "UTC")
-  end_time <- as.POSIXct(Sys.Date(), tz = "UTC")
-  
-  # Récupérer les trades
-  trades <- fetch_trades(symbol, start_time, end_time)
-  
-  # Si des trades sont récupérés, les afficher dans un tableau (data frame)
-  if (nrow(trades) > 0) {
-    print("Transactions récupérées :")
-    print(head(trades))  # Afficher les premières lignes du tableau
-    
-    # Afficher dans une vue sous forme de tableau si vous êtes dans RStudio
-    View(trades)
-  } else {
-    print("Aucune transaction récupérée pour la période spécifiée.")
+    return(data.frame())
   }
 }
 
-trades<-cbind(trades,transaction_type=ifelse(trades$m==TRUE,"Vente","Achat"))
-trades$date <- as.POSIXct(trades$T / 1000, origin = "1970-01-01", tz = "UTC")  # Convertir le timestamp en date
-trades$day <- as.Date(trades$date)  # Extraire la date (sans l'heure)
+# Initialiser les dataframes à vide
+df_normal <- data.frame()
+df_whale <- data.frame()
+q_whale <- data.frame()
 
-# Conversion et nettoyage des données (comme précédemment)
-trades_clean <- trades %>%
-  mutate(
-    q = as.numeric(as.character(q)),
-    p = as.numeric(as.character(p))
-  ) %>%
-  filter(!is.na(q) & !is.na(p))
+# Charger les anciens fichiers s’ils existent
+if (file.exists("df_normal.csv")) {
+  df_normal <- read.csv("df_normal.csv")
+}
+if (file.exists("df_whale.csv")) {
+  df_whale <- read.csv("df_whale.csv")
+}
+if (file.exists("q_whale.csv")) {
+  q_whale <- read.csv("q_whale.csv")
+}
 
-# Calcul pour toutes les transactions
-daily_summary <- trades_clean %>%
-  mutate(total = q * p) %>%
-  group_by(day, transaction_type) %>%
-  summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
-  group_by(day) %>%
-  summarise(
-    Achat = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
-    Vente = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
-    difference = Achat - Vente
-  )
+# Définir la paire et la période
+symbol <- "BTCUSDT"
+start_time <- as.POSIXct(Sys.Date() - 1, tz = "UTC")
+end_time <- as.POSIXct(Sys.Date(), tz = "UTC")
 
-# Calcul pour les transactions de "whales" (plus de 10 BTC)
-daily_summary_whales <- trades_clean %>%
-  filter(q >= 10) %>%  # Filtre pour les transactions de 10 BTC ou plus
-  mutate(total = q * p) %>%
-  group_by(day, transaction_type) %>%
-  summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
-  group_by(day) %>%
-  summarise(
-    Achat_whales = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
-    Vente_whales = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
-    difference_whales = Achat_whales - Vente_whales
-  )
-t_wales=trades_clean[,-4:-8]
-whales= subset(t_wales,trades_clean$q >= 10)
+# Récupérer les nouveaux trades
+trades <- fetch_trades(symbol, start_time, end_time)
 
-df_normal=rbind(df_normal,daily_summary)
-df_whale=rbind(df_whale,daily_summary_whales)
-q_whale=rbind(q_whale,whales)
+if (nrow(trades) > 0) {
+  trades <- trades %>%
+    mutate(
+      transaction_type = ifelse(m == TRUE, "Vente", "Achat"),
+      date = as.POSIXct(T / 1000, origin = "1970-01-01", tz = "UTC"),
+      day = as.Date(date),
+      q = as.numeric(as.character(q)),
+      p = as.numeric(as.character(p))
+    ) %>%
+    filter(!is.na(q) & !is.na(p))
 
-write.csv(df_normal, "df_normal.csv", row.names = FALSE)
-write.csv(df_whale, "df_whale.csv", row.names = FALSE)
-write.csv(q_whale, "q_whale.csv", row.names = FALSE)
+  # Résumé global
+  daily_summary <- trades %>%
+    mutate(total = q * p) %>%
+    group_by(day, transaction_type) %>%
+    summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
+    group_by(day) %>%
+    summarise(
+      Achat = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
+      Vente = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
+      difference = Achat - Vente
+    )
 
-system("git add df_normal.csv")  
-system("git commit -m 'Mise a jour des donnees recuperees'")  
-system("git push origin main")
+  # Résumé whale
+  daily_summary_whales <- trades %>%
+    filter(q >= 10) %>%
+    mutate(total = q * p) %>%
+    group_by(day, transaction_type) %>%
+    summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
+    group_by(day) %>%
+    summarise(
+      Achat_whales = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
+      Vente_whales = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
+      difference_whales = Achat_whales - Vente_whales
+    )
 
-system("git add df_whale.csv") 
-system("git add q_whale.csv") 
+  whales <- trades %>%
+    filter(q >= 10) %>%
+    select(-m, -f, -a, -F, -T)
+
+  # Ajouter aux anciens fichiers
+  df_normal <- bind_rows(df_normal, daily_summary)
+  df_whale <- bind_rows(df_whale, daily_summary_whales)
+  q_whale <- bind_rows(q_whale, whales)
+
+  # Sauvegarder
+  write.csv(df_normal, "df_normal.csv", row.names = FALSE)
+  write.csv(df_whale, "df_whale.csv", row.names = FALSE)
+  write.csv(q_whale, "q_whale.csv", row.names = FALSE)
+
+  message("Mise à jour terminée : fichiers CSV sauvegardés.")
+} else {
+  message("Aucune nouvelle donnée à ajouter.")
+}
+
 
