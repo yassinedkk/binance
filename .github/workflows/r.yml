@@ -15,7 +15,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Nécessaire pour les opérations git ultérieures
-
+      - name: Check public IP and location
+        run: |
+          echo "Public IP:"
+          curl https://api.ipify.org
+          echo ""
+          echo "Location info:"
+          curl https://ipapi.co/json/
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
 
