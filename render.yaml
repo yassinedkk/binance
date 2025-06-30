@@ -1,16 +1,10 @@
 services:
-  - type: cron
-    name: binance-cron
+  - type: web
+    name: binance-updater
+    plan: free
     runtime: docker
-    schedule: "0 0 * * *"  # Tous les jours à minuit UTC
-    buildCommand: |
-      apt-get update -qq && \
-      apt-get install -y --no-install-recommends \
-        r-base \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        libxml2-dev
-    startCommand: Rscript /opt/render/project/src/binance.R
+    dockerfilePath: Dockerfile
+    schedule: "0 0 * * *"  # Exécution quotidienne à minuit UTC
     envVars:
       - key: RENDER
         value: "true"
