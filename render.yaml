@@ -1,6 +1,7 @@
 services:
   - type: cron
     name: binance-cron
+    runtime: docker
     schedule: "0 0 * * *"  # Tous les jours à minuit UTC
     buildCommand: |
       apt-get update -qq && \
