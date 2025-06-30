@@ -1,13 +1,25 @@
-# Charger les bibliothèques nécessaires
+# binance.R - Script complet pour Render.com + GitHub
+
+# 1. Installation automatique des packages
+required_packages <- c("httr", "jsonlite", "dplyr", "readr", "tidyr")
+new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages, repos = "https://cloud.r-project.org")
+
+# 2. Chargement des librairies
 library(httr)
 library(jsonlite)
 library(dplyr)
+library(readr)
+library(tidyr)
 
-# Fonction de récupération des trades Binance
+# 3. Fonction pour contourner les restrictions Binance (avec proxy)
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  url <- "https://api.binance.com/api/v3/aggTrades"
+  base_url <- "https://api.binance.com/api/v3/aggTrades"
+  proxy_url <- "https://cors-anywhere.herokuapp.com/"  # Proxy gratuit
+  url <- paste0(proxy_url, base_url)
+  
   trades <- list()
-
+  
   repeat {
     params <- list(
       symbol = symbol,
@@ -15,111 +27,115 @@ fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
       endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
       limit = limit
     )
-
-    response <- GET(url, query = params)
-
-    if (http_status(response)$category != "Success") {
-      message("Erreur API : ", content(response, as = "text", encoding = "UTF-8"))
-      break
+    
+    response <- tryCatch(
+      GET(url, query = params, add_headers("X-Requested-With" = "XMLHttpRequest")),
+      error = function(e) stop("Erreur de connexion : ", e$message)
+    )
+    
+    if (status_code(response) != 200) {
+      stop("Erreur API : ", content(response, "text"))
     }
-
-    data <- fromJSON(content(response, as = "text", encoding = "UTF-8"), simplifyDataFrame = TRUE)
-
-    if (is.null(data) || nrow(data) == 0) {
-      message("Aucun trade récupéré.")
-      break
-    }
-
+    
+    data <- fromJSON(content(response, "text"))
+    if (is.null(data) || nrow(data) == 0) break
+    
     trades <- append(trades, list(data))
-    start_time <- as.POSIXct(max(data$T) / 1000, origin = "1970-01-01", tz = "UTC") + 1
-
+    start_time <- as.POSIXct(max(data$T)/1000, origin = "1970-01-01", tz = "UTC") + 1
     if (nrow(data) < limit) break
   }
+  
+  if (length(trades) > 0) bind_rows(trades) else data.frame()
+}
 
-  if (length(trades) > 0) {
-    return(bind_rows(trades))
+# 4. Chargement des données existantes
+load_or_init <- function(file) {
+  if (file.exists(file)) {
+    tryCatch(
+      read_csv(file),
+      error = function(e) data.frame()
+    )
   } else {
-    return(data.frame())
+    data.frame()
   }
 }
 
-# Initialiser les dataframes à vide
-df_normal <- data.frame()
-df_whale <- data.frame()
-q_whale <- data.frame()
+# 5. Initialisation des données
+df_normal <- load_or_init("df_normal.csv")
+df_whale <- load_or_init("df_whale.csv")
+q_whale <- load_or_init("q_whale.csv")
 
-# Charger les anciens fichiers s’ils existent
-if (file.exists("df_normal.csv")) {
-  df_normal <- read.csv("df_normal.csv")
-}
-if (file.exists("df_whale.csv")) {
-  df_whale <- read.csv("df_whale.csv")
-}
-if (file.exists("q_whale.csv")) {
-  q_whale <- read.csv("q_whale.csv")
-}
+# 6. Récupération des nouvelles données
+tryCatch({
+  message("\nDébut de l'exécution à ", Sys.time())
+  
+  new_trades <- fetch_trades(
+    symbol = "BTCUSDT",
+    start_time = Sys.Date() - 1,
+    end_time = Sys.Date()
+  )
+  
+  if (nrow(new_trades) > 0) {
+    message(nrow(new_trades), " nouvelles transactions récupérées")
+    
+    # Traitement des données
+    processed <- new_trades %>%
+      mutate(
+        transaction_type = ifelse(m, "Vente", "Achat"),
+        date = as.POSIXct(T/1000, origin = "1970-01-01", tz = "UTC"),
+        day = as.Date(date),
+        q = as.numeric(q),
+        p = as.numeric(p),
+        total = q * p
+      ) %>%
+      filter(!is.na(q) & !is.na(p))
+    
+    # Mise à jour des fichiers
+    df_normal <- processed %>%
+      group_by(day, transaction_type) %>%
+      summarise(sum = sum(total), .groups = "drop") %>%
+      pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
+      mutate(difference = Achat - Vente) %>%
+      bind_rows(df_normal) %>%
+      distinct(day, .keep_all = TRUE)
+    
+    df_whale <- processed %>%
+      filter(q >= 10) %>%
+      group_by(day, transaction_type) %>%
+      summarise(sum = sum(total), .groups = "drop") %>%
+      pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
+      mutate(difference_whales = Achat - Vente) %>%
+      bind_rows(df_whale) %>%
+      distinct(day, .keep_all = TRUE)
+    
+    q_whale <- processed %>%
+      filter(q >= 10) %>%
+      select(-m, -f, -a, -F, -T) %>%
+      bind_rows(q_whale)
+    
+    # Sauvegarde
+    write_csv(df_normal, "df_normal.csv")
+    write_csv(df_whale, "df_whale.csv")
+    write_csv(q_whale, "q_whale.csv")
+    message("Fichiers CSV mis à jour")
+    
+    # Push vers GitHub (uniquement sur Render)
+    if (Sys.getenv("RENDER") == "true") {
+      message("Configuration Git...")
+      system("git config --global user.name 'Render Bot'")
+      system("git config --global user.email 'render@bot.com'")
+      system(paste0("git remote set-url origin https://", Sys.getenv("GITHUB_PAT"), "@github.com/yassinedkk/binance.git"))
+      system("git add *.csv")
+      system("git commit -m '[Render] Auto-update' || echo 'Aucun changement'")
+      system("git push origin main")
+      message("Push vers GitHub réussi!")
+    }
+  } else {
+    message("Aucune nouvelle donnée aujourd'hui")
+  }
+}, error = function(e) {
+  message("ERREUR : ", e$message)
+  write_lines(paste(Sys.time(), e$message), "error_log.txt")
+})
 
-# Définir la paire et la période
-symbol <- "BTCUSDT"
-start_time <- as.POSIXct(Sys.Date() - 1, tz = "UTC")
-end_time <- as.POSIXct(Sys.Date(), tz = "UTC")
-
-# Récupérer les nouveaux trades
-trades <- fetch_trades(symbol, start_time, end_time)
-
-if (nrow(trades) > 0) {
-  trades <- trades %>%
-    mutate(
-      transaction_type = ifelse(m == TRUE, "Vente", "Achat"),
-      date = as.POSIXct(T / 1000, origin = "1970-01-01", tz = "UTC"),
-      day = as.Date(date),
-      q = as.numeric(as.character(q)),
-      p = as.numeric(as.character(p))
-    ) %>%
-    filter(!is.na(q) & !is.na(p))
-
-  # Résumé global
-  daily_summary <- trades %>%
-    mutate(total = q * p) %>%
-    group_by(day, transaction_type) %>%
-    summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
-    group_by(day) %>%
-    summarise(
-      Achat = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
-      Vente = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
-      difference = Achat - Vente
-    )
-
-  # Résumé whale
-  daily_summary_whales <- trades %>%
-    filter(q >= 10) %>%
-    mutate(total = q * p) %>%
-    group_by(day, transaction_type) %>%
-    summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
-    group_by(day) %>%
-    summarise(
-      Achat_whales = sum(sum * (transaction_type == "Achat"), na.rm = TRUE),
-      Vente_whales = sum(sum * (transaction_type == "Vente"), na.rm = TRUE),
-      difference_whales = Achat_whales - Vente_whales
-    )
-
-  whales <- trades %>%
-    filter(q >= 10) %>%
-    select(-m, -f, -a, -F, -T)
-
-  # Ajouter aux anciens fichiers
-  df_normal <- bind_rows(df_normal, daily_summary)
-  df_whale <- bind_rows(df_whale, daily_summary_whales)
-  q_whale <- bind_rows(q_whale, whales)
-
-  # Sauvegarder
-  write.csv(df_normal, "df_normal.csv", row.names = FALSE)
-  write.csv(df_whale, "df_whale.csv", row.names = FALSE)
-  write.csv(q_whale, "q_whale.csv", row.names = FALSE)
-
-  message("Mise à jour terminée : fichiers CSV sauvegardés.")
-} else {
-  message("Aucune nouvelle donnée à ajouter.")
-}
-
-
+message("Fin de l'exécution à ", Sys.time())
