@@ -31,7 +31,7 @@ jobs:
     - name: Run script
       run: Rscript binance.R
       env:
-        PROXY_API_KEY: ${{ secrets.SCRAPINGBEE_API_KEY }}
+        SCRAPINGBEE_API_KEY: ${{ secrets.SCRAPINGBEE_API_KEY }}
         
     - name: Upload error log
       if: failure()
