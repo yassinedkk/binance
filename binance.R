@@ -2,7 +2,7 @@ library(httr)
 library(jsonlite)
 library(dplyr)
 library(readr)
-symbol <- "BTCUSDT"
+SYMBOL <- "BTCUSDT"
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
   url <- "https://api.binance.com/api/v3/aggTrades"
   params <- list(
