@@ -26,7 +26,7 @@ jobs:
 
     - name: Install R packages
       run: |
-        R -e "install.packages(c('httr', 'jsonlite', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
+        R -e "install.packages(c('httr', 'jsonlite', 'dplyr', 'readr' ,'tidyr'), repos='https://cloud.r-project.org')"
         R -e "if (!require('httr')) quit(status=1)"
 
     - name: Run script
