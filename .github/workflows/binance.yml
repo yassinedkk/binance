@@ -19,7 +19,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        R -e "install.packages(c('httr', 'jsonlite', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
+        R -e "install.packages(c('httr', 'curl', 'jsonlite', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
         
     - name: Configure proxy for Binance
       run: |
