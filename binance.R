@@ -3,79 +3,82 @@ library(jsonlite)
 library(dplyr)
 library(readr)
 
-# Configuration ----
+# Configuration
 SYMBOL <- "BTCUSDT"
 MAX_RETRIES <- 3
-BINANCE_API <- "https://api.binance.com/api/v3/aggTrades"
-PROXY_SERVICES <- c(
+PROXY_URLS <- c(
   "https://cors-anywhere.herokuapp.com/",
-  "https://thingproxy.freeboard.io/fetch/",
+  "https://proxy.cors.sh/",
   "https://api.allorigins.win/get?url="
 )
 
-# Fonction de récupération améliorée ----
-fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  for (proxy in PROXY_SERVICES) {
-    for (attempt in 1:MAX_RETRIES) {
-      tryCatch({
-        # Construction de l'URL
-        url <- if(grepl("allorigins", proxy)) {
-          paste0(proxy, URLencode(BINANCE_API))
-        } else {
-          paste0(proxy, BINANCE_API)
-        }
-        
-        params <- list(
-          symbol = symbol,
-          startTime = as.numeric(as.POSIXct(start_time, tz = "UTC")) * 1000,
-          endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
-          limit = limit
-        )
-        
-        response <- GET(url, query = params, timeout(10))
-        
-        if(status_code(response) == 200) {
-          content <- if(grepl("allorigins", proxy)) {
-            fromJSON(rawToChar(response$content))$contents
-          } else {
-            content(response, "text")
-          }
-          return(fromJSON(content))
-        }
-      }, error = function(e) {
-        message("Tentative avec ", proxy, " échouée (", attempt, "/", MAX_RETRIES, "): ", e$message)
-        Sys.sleep(1)
-      })
+# Initialisation des fichiers CSV
+init_files <- function() {
+  files <- c("df_normal.csv", "df_whale.csv", "q_whale.csv")
+  for (file in files) {
+    if (!file.exists(file)) {
+      write_csv(data.frame(), file)
     }
   }
-  message("Tous les proxies ont échoué")
-  return(data.frame())
 }
 
-# Fonction principale ----
+# Fonction de récupération avec proxy
+fetch_with_proxy <- function(url, params) {
+  for (proxy in PROXY_URLS) {
+    tryCatch({
+      full_url <- if (grepl("allorigins", proxy)) {
+        paste0(proxy, URLencode(url))
+      } else {
+        paste0(proxy, url)
+      }
+      
+      response <- GET(full_url, query = params, timeout(10))
+      
+      if (status_code(response) == 200) {
+        content <- if (grepl("allorigins", proxy)) {
+          fromJSON(content(response, "text"))$contents
+        } else {
+          content(response, "text")
+        }
+        return(fromJSON(content))
+      }
+    }, error = function(e) {
+      message("Proxy ", proxy, " échoué: ", e$message)
+    })
+  }
+  stop("Tous les proxies ont échoué")
+}
+
+# Fonction principale
 main <- function() {
-  message("\n==== Début exécution ", Sys.time(), " ====")
+  init_files()
   
-  # Initialisation des données
-  df_normal <- load_or_init("df_normal.csv")
-  df_whale <- load_or_init("df_whale.csv")
-  q_whale <- load_or_init("q_whale.csv")
+  # Charger les données existantes
+  df_normal <- read_csv("df_normal.csv", show_col_types = FALSE)
+  df_whale <- read_csv("df_whale.csv", show_col_types = FALSE)
+  q_whale <- read_csv("q_whale.csv", show_col_types = FALSE)
   
-  # Récupération des nouvelles données
-  new_trades <- fetch_trades(
+  # Récupérer les nouvelles données
+  params <- list(
     symbol = SYMBOL,
-    start_time = Sys.Date() - 1,
-    end_time = Sys.Date()
+    startTime = as.numeric(as.POSIXct(Sys.Date() - 1)) * 1000,
+    endTime = as.numeric(as.POSIXct(Sys.Date())) * 1000,
+    limit = 1000
   )
   
+  new_data <- tryCatch({
+    fetch_with_proxy("https://api.binance.com/api/v3/aggTrades", params)
+  }, error = function(e) {
+    message("Échec de récupération: ", e$message)
+    return(data.frame())
+  })
+  
   # Traitement des données
-  if (nrow(new_trades) > 0) {
-    message(nrow(new_trades), " nouvelles transactions trouvées")
-    
-    processed <- new_trades %>%
+  if (nrow(new_data) > 0) {
+    processed <- new_data %>%
       mutate(
-        transaction_type = ifelse(isTRUE(m), "Vente", "Achat"),
-        date = as.POSIXct(T/1000, origin = "1970-01-01", tz = "UTC"),
+        transaction_type = ifelse(m, "Vente", "Achat"),
+        date = as.POSIXct(T/1000, origin = "1970-01-01"),
         day = as.Date(date),
         q = as.numeric(q),
         p = as.numeric(p),
@@ -88,82 +91,51 @@ main <- function() {
       # df_normal
       daily_summary <- processed %>%
         group_by(day, transaction_type) %>%
-        summarise(sum = sum(total, na.rm = TRUE), .groups = "drop")
+        summarise(sum = sum(total), .groups = "drop")
       
-      if (nrow(daily_summary) > 0) {
-        df_normal <- daily_summary %>%
-          pivot_wider(
-            names_from = transaction_type,
-            values_from = sum,
-            values_fill = 0
-          ) %>%
-          mutate(difference = Achat - Vente) %>%
-          bind_rows(df_normal) %>%
-          distinct(day, .keep_all = TRUE)
-      }
+      df_normal <- daily_summary %>%
+        pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
+        mutate(difference = Achat - Vente) %>%
+        bind_rows(df_normal) %>%
+        distinct(day, .keep_all = TRUE)
       
-      # df_whale (transactions > 10 BTC)
-      if (any(processed$q >= 10)) {
-        df_whale <- processed %>%
-          filter(q >= 10) %>%
-          group_by(day, transaction_type) %>%
-          summarise(sum = sum(total, na.rm = TRUE), .groups = "drop") %>%
-          pivot_wider(
-            names_from = transaction_type,
-            values_from = sum,
-            values_fill = 0
-          ) %>%
-          mutate(difference_whales = Achat - Vente) %>%
-          bind_rows(df_whale) %>%
-          distinct(day, .keep_all = TRUE)
-      }
+      # df_whale
+      df_whale <- processed %>%
+        filter(q >= 10) %>%
+        group_by(day, transaction_type) %>%
+        summarise(sum = sum(total), .groups = "drop") %>%
+        pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
+        mutate(difference_whales = Achat - Vente) %>%
+        bind_rows(df_whale) %>%
+        distinct(day, .keep_all = TRUE)
       
-      # q_whale (détail des grosses transactions)
+      # q_whale
       q_whale <- processed %>%
         filter(q >= 10) %>%
         select(day, date, q, p, transaction_type) %>%
         bind_rows(q_whale)
     }
-  } else {
-    message("Aucune nouvelle donnée disponible")
   }
   
   # Sauvegarde
   write_csv(df_normal, "df_normal.csv")
   write_csv(df_whale, "df_whale.csv")
   write_csv(q_whale, "q_whale.csv")
-  message("Fichiers CSV sauvegardés")
   
-  # Push vers GitHub (uniquement si changement)
+  # Push vers GitHub
   if (Sys.getenv("CI") == "true") {
     system("git config --global user.name 'GitHub Actions'")
     system("git config --global user.email 'actions@github.com'")
-    
-    # Vérification des changements
     system("git add *.csv")
-    changes <- system("git diff --cached --name-only", intern = TRUE)
-    
-    if (length(changes) > 0) {
-      system("git commit -m 'Auto-update data'")
-      system("git push")
-      message("Push vers GitHub réussi")
-    } else {
-      message("Aucun changement détecté")
-    }
+    system("git commit -m 'Auto-update data' || echo 'No changes'")
+    system("git push")
   }
-  
-  message("==== Fin exécution ", Sys.time(), " ====")
 }
 
-# Exécution ----
+# Exécution
 tryCatch({
   main()
 }, error = function(e) {
   message("ERREUR: ", e$message)
-  # Journalisation détaillée
-  write_lines(
-    paste(Sys.time(), "Erreur:", e$message, "\n", paste(capture.output(traceback()), collapse = "\n")),
-    "error_log.txt"
-  )
-  quit(status = 1)
+  write_lines(paste(Sys.time(), e$message), "error_log.txt")
 })
