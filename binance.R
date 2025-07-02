@@ -5,7 +5,9 @@ library(readr)
 
 # Configuration
 SYMBOL <- "BTCUSDT"
-PROXY_API_KEY <- "51JFEA1XP40U2ORZKLDPKRT41V19CVWOA7R5F6JOU25I84U538DXEUMLY91K21K2JVYU8FD36TJCYXKJ"
+PROXY_API_KEY <- Sys.getenv("SCRAPINGBEE_API_KEY")
+if (PROXY_API_KEY == "") stop(" Il manque la variable SCRAPINGBEE_API_KEY")
+
 SCRAPINGBEE_URL <- "https://app.scrapingbee.com/api/v1/"
 
 # Fonction pour charger/initialiser les fichiers
