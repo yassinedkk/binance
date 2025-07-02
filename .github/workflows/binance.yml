@@ -2,17 +2,17 @@ name: Binance Data Update
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Minuit UTC chaque jour
+    - cron: '0 0 * * *'  # Minuit UTC
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Permet de pousser les changements
+      contents: write  # Permissions pour pousser les changements
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
       
     - name: Setup R
@@ -32,9 +32,9 @@ jobs:
       run: |
         R -e "install.packages(c('httr', 'jsonlite', 'dplyr', 'readr'), repos='https://cloud.r-project.org')"
         
-    - name: Run data script
+    - name: Run script
       run: Rscript binance.R
-      
+        
     - name: Upload error log
       if: failure()
       uses: actions/upload-artifact@v4
