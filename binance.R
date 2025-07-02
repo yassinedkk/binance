@@ -2,48 +2,20 @@ library(httr)
 library(jsonlite)
 library(dplyr)
 library(readr)
-
-# Configuration
-SYMBOL <- "BTCUSDT"
-PROXY_API_KEY <- Sys.getenv("SCRAPINGBEE_API_KEY")
-if (PROXY_API_KEY == "") stop(" Il manque la variable SCRAPINGBEE_API_KEY")
-
-SCRAPINGBEE_URL <- "https://app.scrapingbee.com/api/v1/"
-
-# Fonction pour charger/initialiser les fichiers
-init_files <- function() {
-  files <- c("df_normal.csv", "df_whale.csv", "q_whale.csv")
-  for (file in files) {
-    if (!file.exists(file)) {
-      write_csv(data.frame(), file)
-    }
-  }
-}
-
-# Fonction de récupération fiable avec proxy professionnel
+symbol <- "BTCUSDT"
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  base_url <- "https://api.binance.com/api/v3/aggTrades"
-  
+  url <- "https://api.binance.com/api/v3/aggTrades"
   params <- list(
-    "api_key" = PROXY_API_KEY,
-    "url" = base_url,
-    "params" = URLencode(paste0(
-      "symbol=", symbol,
-      "&startTime=", as.numeric(as.POSIXct(start_time)) * 1000,
-      "&endTime=", as.numeric(as.POSIXct(end_time)) * 1000,
-      "&limit=", limit
-    ))
+    symbol    = symbol,
+    startTime = as.numeric(as.POSIXct(start_time, tz="UTC")) * 1000,
+    endTime   = as.numeric(as.POSIXct(end_time,   tz="UTC")) * 1000,
+    limit     = limit
   )
-  
-  response <- GET(SCRAPINGBEE_URL, query = params, timeout(10))
-  
-  if (status_code(response) == 200) {
-    data <- fromJSON(content(response, "text"))
-    if (!is.null(data) && is.data.frame(data)) {
-      return(data)
-    }
-  }
-  stop("Échec de la récupération via ScrapingBee")
+  res <- GET(url, query = params)
+  if (status_code(res) != 200) stop("Erreur API Binance : ", status_code(res))
+  data <- fromJSON(content(res, "text"), simplifyDataFrame = TRUE)
+  if (!is.data.frame(data) || nrow(data) == 0) stop("Aucun trade récupéré.")
+  return(data)
 }
 
 # Fonction principale
