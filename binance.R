@@ -1,58 +1,48 @@
-# binance.R - Script complet avec proxy fiable
 library(httr)
 library(jsonlite)
 library(dplyr)
 library(readr)
 library(tidyr)
-
-# Fonction de récupération des trades avec proxy fiable
+# Nouvelle fonction avec rotation de proxies
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  # Utilisation d'un proxy fiable
-  proxy_url <- "https://corsproxy.io/?"
+  proxies <- c(
+    "https://cors-anywhere.herokuapp.com/",
+    "https://api.allorigins.win/get?url=",
+    "https://thingproxy.freeboard.io/fetch/"
+  )
+  
   base_url <- "https://api.binance.com/api/v3/aggTrades"
-  url <- paste0(proxy_url, base_url)
   
-  trades <- list()
-  
-  repeat {
-    params <- list(
-      symbol = symbol,
-      startTime = as.numeric(as.POSIXct(start_time, tz = "UTC")) * 1000,
-      endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
-      limit = limit
-    )
-    
-    response <- tryCatch(
-      GET(url, query = params, timeout(10)),
-      error = function(e) {
-        message("Erreur de connexion: ", e$message)
-        return(NULL)
+  for(i in 1:length(proxies)) {
+    tryCatch({
+      url <- ifelse(
+        grepl("allorigins", proxies[i]),
+        paste0(proxies[i], URLencode(base_url)),
+        paste0(proxies[i], base_url)
+      )
+      
+      response <- GET(url, 
+                    query = list(
+                      symbol = symbol,
+                      startTime = as.numeric(as.POSIXct(start_time, tz = "UTC")) * 1000,
+                      endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
+                      limit = limit
+                    ),
+                    timeout(10))
+      
+      if(status_code(response) == 200) {
+        content <- if(grepl("allorigins", proxies[i])) {
+          fromJSON(rawToChar(response$content))$contents
+        } else {
+          content(response, "text")
+        }
+        return(fromJSON(content))
       }
-    )
-    
-    if (is.null(response) || status_code(response) != 200) {
-      message("Erreur API: ", if(!is.null(response)) content(response, "text") else "Pas de réponse")
-      break
-    }
-    
-    data <- tryCatch(
-      fromJSON(content(response, "text")),
-      error = function(e) {
-        message("Erreur de parsing JSON: ", e$message)
-        NULL
-      }
-    )
-    
-    if (is.null(data) || nrow(data) == 0) break
-    
-    trades <- append(trades, list(data))
-    last_time <- max(data$T)
-    start_time <- as.POSIXct(last_time/1000, origin = "1970-01-01", tz = "UTC") + 0.001
-    if (nrow(data) < limit) break
+    }, error = function(e) NULL)
   }
-  
-  if (length(trades) > 0) bind_rows(trades) else data.frame()
+  stop("Tous les proxies ont échoué")
 }
+
 
 # Chargement des données existantes
 load_or_init <- function(file) {
