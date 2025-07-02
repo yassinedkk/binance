@@ -6,25 +6,27 @@ library(readr)
 
 # Paramètres
 SYMBOL <- "BTCUSDT"
-
-# Récupérer les trades directement depuis Binance
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  url <- "https://api.binance.com/api/v3/aggTrades"
-  res <- GET(url, query = list(
+  proxy_base <- "https://remarkt-binance.workers.dev"
+
+  path <- "/api/v3/aggTrades"
+  query <- list(
     symbol    = symbol,
     startTime = as.numeric(as.POSIXct(start_time, tz="UTC")) * 1000,
     endTime   = as.numeric(as.POSIXct(end_time,   tz="UTC")) * 1000,
     limit     = limit
-  ))
-  if (status_code(res) != 200) {
-    stop("Erreur API Binance : ", status_code(res))
-  }
-  df <- fromJSON(content(res, "text"), simplifyDataFrame = TRUE)
-  if (!is.data.frame(df) || nrow(df) == 0) {
-    stop("Aucun trade récupéré.")
-  }
+  )
+
+  res <- httr::GET(
+    url = paste0(proxy_base, path),
+    query = query,
+    httr::timeout(15)
+  )
+  httr::stop_for_status(res)
+  df <- jsonlite::fromJSON(httr::content(res, "text"), simplifyDataFrame = TRUE)
   return(df)
 }
+
 
 main <- function() {
   message("==== Début exécution ", Sys.time(), " ====")
