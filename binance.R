@@ -12,7 +12,7 @@ BINANCE_API <- "https://api.binance.com/api/v3/aggTrades"
 
 # Fonction améliorée de récupération des trades ----
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  api_key <- Sys.getenv("SCRAPINGBEE_API_KEY")
+  api_key <- Sys.getenv("51JFEA1XP40U2ORZKLDPKRT41V19CVWOA7R5F6JOU25I84U538DXEUMLY91K21K2JVYU8FD36TJCYXKJ")
   if (is.null(api_key) stop("Clé API ScrapingBee manquante")
   
   for (attempt in 1:MAX_RETRIES) {
