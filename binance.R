@@ -5,7 +5,7 @@ library(readr)
 
 # Configuration
 SYMBOL <- "BTCUSDT"
-PROXY_API_KEY <- "pk_1234567890"  # Remplacez par votre clé réelle de ScrapingBee
+PROXY_API_KEY <- "51JFEA1XP40U2ORZKLDPKRT41V19CVWOA7R5F6JOU25I84U538DXEUMLY91K21K2JVYU8FD36TJCYXKJ"
 SCRAPINGBEE_URL <- "https://app.scrapingbee.com/api/v1/"
 
 # Fonction pour charger/initialiser les fichiers
