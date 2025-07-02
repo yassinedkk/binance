@@ -2,7 +2,7 @@ name: Binance Data Update
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Minuit UTC chaque jour
+    - cron: '0 0 * * *'  # Minuit UTC
   workflow_dispatch:
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
         
     - name: Upload error log
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: error-log
         path: error_log.txt
