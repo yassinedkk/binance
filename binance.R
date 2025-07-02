@@ -1,4 +1,3 @@
-# binance.R - Script complet avec gestion robuste des erreurs
 library(httr)
 library(jsonlite)
 library(dplyr)
@@ -7,68 +6,50 @@ library(readr)
 # Configuration ----
 SYMBOL <- "BTCUSDT"
 MAX_RETRIES <- 3
-PROXY_SERVICE <- "https://api.scrapingbee.com/v1/"
 BINANCE_API <- "https://api.binance.com/api/v3/aggTrades"
+PROXY_SERVICES <- c(
+  "https://cors-anywhere.herokuapp.com/",
+  "https://thingproxy.freeboard.io/fetch/",
+  "https://api.allorigins.win/get?url="
+)
 
-# Fonction améliorée de récupération des trades ----
+# Fonction de récupération améliorée ----
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  api_key <- "51JFEA1XP40U2ORZKLDPKRT41V19CVWOA7R5F6JOU25I84U538DXEUMLY91K21K2JVYU8FD36TJCYXKJ"
-  
-  
-  for (attempt in 1:MAX_RETRIES) {
-    tryCatch({
-      # Construction de l'URL avec proxy
-      url <- paste0(
-        PROXY_SERVICE,
-        "?url=", URLencode(BINANCE_API),
-        "&api_key=", api_key,
-        "&render_js=false"
-      )
-      
-      # Paramètres de la requête
-      params <- list(
-        symbol = symbol,
-        startTime = as.numeric(as.POSIXct(start_time, tz = "UTC")) * 1000,
-        endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
-        limit = limit
-      )
-      
-      # Envoi de la requête
-      response <- GET(url, query = params, timeout(10))
-      
-      # Vérification de la réponse
-      if (status_code(response) == 200) {
-        content <- content(response, "text", encoding = "UTF-8")
-        data <- fromJSON(content)
-        
-        if (!is.null(data) && is.data.frame(data) && nrow(data) > 0) {
-          return(data)
+  for (proxy in PROXY_SERVICES) {
+    for (attempt in 1:MAX_RETRIES) {
+      tryCatch({
+        # Construction de l'URL
+        url <- if(grepl("allorigins", proxy)) {
+          paste0(proxy, URLencode(BINANCE_API))
+        } else {
+          paste0(proxy, BINANCE_API)
         }
-      }
-    }, error = function(e) {
-      message("Tentative ", attempt, "/", MAX_RETRIES, " échouée: ", e$message)
-      Sys.sleep(2)  # Attente avant nouvelle tentative
-    })
+        
+        params <- list(
+          symbol = symbol,
+          startTime = as.numeric(as.POSIXct(start_time, tz = "UTC")) * 1000,
+          endTime = as.numeric(as.POSIXct(end_time, tz = "UTC")) * 1000,
+          limit = limit
+        )
+        
+        response <- GET(url, query = params, timeout(10))
+        
+        if(status_code(response) == 200) {
+          content <- if(grepl("allorigins", proxy)) {
+            fromJSON(rawToChar(response$content))$contents
+          } else {
+            content(response, "text")
+          }
+          return(fromJSON(content))
+        }
+      }, error = function(e) {
+        message("Tentative avec ", proxy, " échouée (", attempt, "/", MAX_RETRIES, "): ", e$message)
+        Sys.sleep(1)
+      })
+    }
   }
-  
-  message("Échec après ", MAX_RETRIES, " tentatives")
-  return(data.frame())  # Retourne un dataframe vide
-}
-
-# Fonction de chargement des données ----
-load_or_init <- function(file) {
-  if (file.exists(file)) {
-    tryCatch({
-      df <- read_csv(file, show_col_types = FALSE)
-      if (nrow(df) == 0) return(data.frame())
-      return(df)
-    }, error = function(e) {
-      message("Erreur lecture ", file, ": ", e$message)
-      return(data.frame())
-    })
-  } else {
-    return(data.frame())
-  }
+  message("Tous les proxies ont échoué")
+  return(data.frame())
 }
 
 # Fonction principale ----
