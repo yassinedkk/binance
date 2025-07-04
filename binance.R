@@ -7,7 +7,7 @@ library(readr)
 # Paramètres
 SYMBOL <- "BTCUSDT"
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
-  proxy_base <- "https://binance-proxy-fly-quiet-bush-9751.fly.dev"
+  proxy_base <- "https://binance-proxy-fly-patient-frost-171.fly.dev"
 
   path <- "/api/v3/aggTrades"
   query <- list(
