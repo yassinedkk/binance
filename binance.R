@@ -96,10 +96,21 @@ main <- function() {
     filter(q >= 10) %>%
     select(day, date, q, p, transaction_type)
   
-  # Sauvegarder les CSV
-  write_csv(df_normal, "df_normal.csv")
-  write_csv(df_whale,  "df_whale.csv")
-  write_csv(q_whale,   "q_whale.csv")
+save_and_append_csv <- function(new_df, file_path, key_cols) {
+  if (file.exists(file_path)) {
+    old_df <- read_csv(file_path, show_col_types = FALSE)
+    combined_df <- bind_rows(old_df, new_df) %>%
+      distinct(across(all_of(key_cols)), .keep_all = TRUE)
+  } else {
+    combined_df <- new_df
+  }
+  write_csv(combined_df, file_path)
+}
+
+# Sauvegarde cumulée
+save_and_append_csv(df_normal, "df_normal.csv", c("day"))
+save_and_append_csv(df_whale,  "df_whale.csv",  c("day"))
+save_and_append_csv(q_whale,   "q_whale.csv",   c("day", "date", "q", "p"))
 
 system("git config --global user.email 'your-email@example.com'")
 system("git config --global user.name 'Your Name'")
