@@ -3,6 +3,8 @@ library(httr)
 library(jsonlite)
 library(dplyr)
 library(readr)
+library(tidyr)
+
 
 # Paramètres
 SYMBOL <- "BTCUSDT"
