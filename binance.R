@@ -8,25 +8,48 @@ library(tidyr)
 
 # Paramètres
 SYMBOL <- "BTCUSDT"
+
 fetch_trades <- function(symbol, start_time, end_time, limit = 1000) {
   proxy_base <- "https://binance-proxy-fly-patient-frost-171.fly.dev"
-
   path <- "/api/v3/aggTrades"
-  query <- list(
-    symbol    = symbol,
-    startTime = as.numeric(as.POSIXct(start_time, tz="UTC")) * 1000,
-    endTime   = as.numeric(as.POSIXct(end_time,   tz="UTC")) * 1000,
-    limit     = limit
-  )
-
-  res <- httr::GET(
-    url = paste0(proxy_base, path),
-    query = query,
-    httr::timeout(15)
-  )
-  httr::stop_for_status(res)
-  df <- jsonlite::fromJSON(httr::content(res, "text"), simplifyDataFrame = TRUE)
-  return(df)
+  
+  start_ms <- as.numeric(as.POSIXct(start_time, tz="UTC")) * 1000
+  end_ms   <- as.numeric(as.POSIXct(end_time,   tz="UTC")) * 1000
+  
+  all_trades <- list()
+  current_start <- start_ms
+  
+  repeat {
+    query <- list(
+      symbol    = symbol,
+      startTime = current_start,
+      endTime   = end_ms,
+      limit     = limit
+    )
+    
+    res <- httr::GET(
+      url = paste0(proxy_base, path),
+      query = query,
+      httr::timeout(15)
+    )
+    
+    httr::stop_for_status(res)
+    
+    trades <- jsonlite::fromJSON(httr::content(res, "text"), simplifyDataFrame = TRUE)
+    
+    if (length(trades) == 0) break
+    
+    all_trades[[length(all_trades) + 1]] <- trades
+    
+    last_time <- trades$T[nrow(trades)]
+    if (last_time >= end_ms || nrow(trades) < limit) break
+    
+    # Ajouter 1 ms pour éviter doublons
+    current_start <- last_time + 1
+    Sys.sleep(0.2)  # Évite d'être trop agressif avec l'API
+  }
+  
+  return(dplyr::bind_rows(all_trades))
 }
 
 
