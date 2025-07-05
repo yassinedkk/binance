@@ -56,12 +56,17 @@ main <- function() {
     mutate(difference = Achat - Vente)
   
   # df_whale
-  df_whale <- trades_clean %>%
-    filter(q >= 10) %>%
-    group_by(day, transaction_type) %>%
-    summarise(sum = sum(total), .groups = "drop") %>%
-    pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
-    mutate(difference_whales = Achat - Vente)
+ df_whale <- trades_clean %>%
+  filter(q >= 10) %>%
+  group_by(day, transaction_type) %>%
+  summarise(sum = sum(total), .groups = "drop") %>%
+  pivot_wider(names_from = transaction_type, values_from = sum, values_fill = 0) %>%
+  mutate(
+    Achat = ifelse(!"Achat" %in% colnames(.), 0, Achat),
+    Vente = ifelse(!"Vente" %in% colnames(.), 0, Vente),
+    difference_whales = Achat - Vente
+  )
+
   
   # q_whale
   q_whale <- trades_clean %>%
