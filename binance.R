@@ -77,6 +77,12 @@ main <- function() {
   write_csv(df_normal, "df_normal.csv")
   write_csv(df_whale,  "df_whale.csv")
   write_csv(q_whale,   "q_whale.csv")
+
+system("git config --global user.email 'your-email@example.com'")
+system("git config --global user.name 'Your Name'")
+system("git add *.csv")
+system("git commit -m 'Auto update CSVs'")
+system("git push origin main")
   
   message("==== Fin exécution ", Sys.time(), " ====")
 }
