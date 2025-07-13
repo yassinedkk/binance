@@ -2,7 +2,7 @@ name: Binance Data Update
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # chaque jour à minuit UTC
+    - cron: '15 0 * * *'   # chaque jour à minuit UTC
   workflow_dispatch:
 
 permissions:
