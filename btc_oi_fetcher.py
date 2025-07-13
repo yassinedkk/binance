@@ -52,15 +52,23 @@ def get_yesterday_open_interest():
         return None
 
 def save_cumulative(df_today, filename="btc_oi_cumule.csv"):
-    if os.path.exists(filename):
-        df_existing = pd.read_csv(filename, parse_dates=["Date_Heure"])
-        df_total = pd.concat([df_existing, df_today]).drop_duplicates(subset=["Date_Heure"])
-    else:
-        df_total = df_today
+    try:
+        # Check if file exists and has content
+        if os.path.exists(filename) and os.path.getsize(filename) > 0:
+            df_existing = pd.read_csv(filename, parse_dates=["Date_Heure"])
+            df_total = pd.concat([df_existing, df_today]).drop_duplicates(subset=["Date_Heure"])
+        else:
+            df_total = df_today
 
-    df_total = df_total.sort_values("Date_Heure")
-    df_total.to_csv(filename, index=False)
-    print(f"Données sauvegardées dans {filename} (total: {len(df_total)} lignes)")
+        df_total = df_total.sort_values("Date_Heure")
+        df_total.to_csv(filename, index=False)
+        print(f"Données sauvegardées dans {filename} (total: {len(df_total)} lignes)")
+        
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde: {e}")
+        # Create new file if there's any error
+        df_today.sort_values("Date_Heure").to_csv(filename, index=False)
+        print(f"Création d'un nouveau fichier {filename}")
 
 if __name__ == "__main__":
     print(" Récupération Open Interest - Veille")
