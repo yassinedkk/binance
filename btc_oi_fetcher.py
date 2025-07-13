@@ -22,7 +22,7 @@ def get_yesterday_open_interest():
         "limit": 500
     }
 
-    url = "https://fapi.binance.com/futures/data/openInterestHist"
+    url = "https://binance-fly-purple-wind-3762.fly.dev/futures/data/openInterestHist"
     try:
         r = requests.get(url, params=params, timeout=10)
         r.raise_for_status()
